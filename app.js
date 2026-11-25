@@ -176,7 +176,7 @@
   function cart() { if (!D._cart || D._cartFor !== cartKey()) { let c = null; try { c = JSON.parse(localStorage.getItem(cartKey()) || "null"); } catch (e) {} D._cart = c || { items: [], patient: "", surgeon: "", date: "", deliverTo: "", note: "" }; D._cartFor = cartKey(); } return D._cart; }
   function saveCart() { try { localStorage.setItem(cartKey(), JSON.stringify(cart())); } catch (e) {} }
   const cartCount = () => D.state === "app" && D.role === "customer" ? cart().items.reduce((n, i) => n + i.qty, 0) : 0;
-  function cartLines() { return cart().items.map(i => ({ ...i, it: item(i.mat) })).filter(l => l.it).map(l => ({ mat: l.mat, qty: l.qty, desc: l.it.desc, uom: l.it.uom || "", hsn: l.it.hsn || "", price: +l.it.price || 0, avail: l.it.avail })); }
+  function cartLines() { return cart().items.map(i => ({ ...i, it: item(i.mat) })).filter(l => l.it).map(l => ({ mat: l.mat, qty: l.qty, desc: l.it.desc, uom: l.it.uom || "", hsn: l.it.hsn || "", price: +l.it.price || 0 })); }
   const myOrders = () => Object.entries(D.orders).map(([id, o]) => ({ id, ...o })).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
 
   /* ---------- nav ---------- */
@@ -246,29 +246,26 @@
       <div class="grid kpis">${k.join("")}</div>
       <section class="stack"><div class="row between"><h2>Products</h2><a href="#catalog" class="small strong">Full catalog</a></div>
         ${items().length ? `<div class="grid types">${typesList().map(t => { const n = families().filter(f => f.type === t).length; return `<a href="#catalog-${encodeURIComponent(t)}" class="card pad row"><span class="thumb" style="width:46px;height:46px;flex-shrink:0">${artOf(t)}</span><span><b class="tname">${esc(t)}</b><span class="tiny muted">${n} product${n > 1 ? "s" : ""}</span></span></a>`; }).join("")}</div>` : `<div class="card empty">The catalog is being prepared. Please check again soon.</div>`}</section>
-      ${recent.length ? `<section class="stack"><h2>Order again</h2><div class="card list">${recent.slice(0, 5).map(m => { const it = item(m); return `<div class="row" style="padding:10px 14px"><div style="flex:1;min-width:0"><b class="small">${esc(it.desc)}</b><div class="tiny muted">${esc(it.mat)}</div></div>${avPill(it.avail)}<button class="btn sm" data-add="${esc(m)}" aria-label="Add ${esc(it.desc)} to cart">+ Add</button></div>`; }).join("")}</div></section>` : ""}
+      ${recent.length ? `<section class="stack"><h2>Order again</h2><div class="card list">${recent.slice(0, 5).map(m => { const it = item(m); return `<div class="row" style="padding:10px 14px"><div style="flex:1;min-width:0"><b class="small">${esc(it.desc)}</b><div class="tiny muted">${esc(it.mat)}</div></div><button class="btn sm" data-add="${esc(m)}" aria-label="Add ${esc(it.desc)} to cart">+ Add</button></div>`; }).join("")}</div></section>` : ""}
     </div>`;
   }
   let catState = { type: "ALL", avail: { ok: true, low: true, req: true } };
   function vCatalog(arg) {
     if (arg !== undefined) catState.type = decodeURIComponent(arg) || "ALL";
     const q = ($("#q").value || "").trim().toLowerCase();
-    const list = families().filter(f => (q || catState.type === "ALL" || f.type === catState.type) && (!q || (f.name + " " + f.type + " " + f.items.map(i => i.mat + " " + i.desc).join(" ")).toLowerCase().includes(q)) && f.items.some(i => catState.avail[i.avail]));
+    const list = families().filter(f => (q || catState.type === "ALL" || f.type === catState.type) && (!q || (f.name + " " + f.type + " " + f.items.map(i => i.mat + " " + i.desc).join(" ")).toLowerCase().includes(q)));
     const title = q ? `Results for “${esc(q)}”` : catState.type === "ALL" ? "All products" : esc(catState.type);
     return `<div class="layout">
       <aside class="side card pad stack" style="gap:16px">
         <div class="stack" style="gap:8px"><div class="label">Product type</div>
-          <select id="typesel" aria-label="Product type"><option value="ALL">All products</option>${typesList().map(t => `<option ${catState.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
-        <div class="stack" style="gap:8px"><div class="label">Availability</div>
-          ${Object.keys(AV).map(a => `<label class="row small" style="gap:10px"><input type="checkbox" data-av="${a}" ${catState.avail[a] ? "checked" : ""}>${AV[a][0]}</label>`).join("")}</div>
-      </aside>
+          <div class="stack typelist" role="radiogroup" aria-label="Product type" style="gap:6px">${[["ALL", "All products", families().length], ...typesList().map(t => [t, t, families().filter(f => f.type === t).length])].map(([v, l, n]) => `<label class="row small" style="gap:10px"><input type="radio" name="ptype" value="${esc(v)}" ${catState.type === v ? "checked" : ""}><span style="flex:1">${esc(l)}</span><span class="tiny muted">${n}</span></label>`).join("")}</div></div>
+              </aside>
       <section class="content stack">
         <div class="row between wrap"><h1 class="display" style="font-size:24px">${title}</h1><span class="small muted">${list.length} product${list.length === 1 ? "" : "s"}</span></div>
         ${list.length ? `<div class="grid cards">${list.slice(0, 240).map(f => `<div class="card pad stack" style="gap:8px">
           <a href="#product-${f.id}" class="thumb" style="height:120px;overflow:hidden" aria-hidden="true" tabindex="-1">${pic(f.type, f.img)}</a>
           <a href="#product-${f.id}" class="pname">${esc(f.name)}</a>
           <div class="tiny muted">${esc(f.type)}${f.items.length > 1 ? ` · ${f.items.length} sizes` : ""}</div>
-          <div>${avPill(f.avail)}</div>
           ${f.items.length > 1 ? `<a href="#product-${f.id}" class="btn sm">Choose size</a>` : `<button class="btn sm" data-add="${esc(f.items[0].mat)}">Add to cart</button>`}</div>`).join("")}</div>${list.length > 240 ? '<div class="small muted">Showing the first 240. Search to narrow down.</div>' : ""}` : `<div class="card empty">${items().length ? "No products match. Try another word or product type." : "The catalog is being prepared."}</div>`}
       </section></div>`;
   }
@@ -284,9 +281,8 @@
         <div class="stack" style="flex:1 1 320px;gap:14px">
           <h1 class="display" style="font-size:24px;line-height:1.2">${esc(f.name)}</h1>
           <div class="small muted">Code ${esc(v.mat)}${v.hsn ? " · HSN " + esc(v.hsn) : ""}${v.uom ? " · per " + esc(v.uom) : ""}</div>
-          ${f.items.length > 1 ? `<div class="stack" style="gap:8px"><div class="small strong">Size</div><div class="row wrap" style="gap:8px">${f.items.map(x => `<button class="chip ${x.mat === v.mat ? "on" : ""} av-${x.avail}" data-variant="${esc(x.mat)}" aria-pressed="${x.mat === v.mat}" title="${esc(x.desc)} · ${AV[x.avail][0]}">${esc(x.size || x.desc)}</button>`).join("")}</div></div>` : ""}
+          ${f.items.length > 1 ? `<div class="stack" style="gap:8px"><div class="small strong">Size</div><div class="row wrap" style="gap:8px">${f.items.map(x => `<button class="chip ${x.mat === v.mat ? "on" : ""}" data-variant="${esc(x.mat)}" aria-pressed="${x.mat === v.mat}" title="${esc(x.desc)}">${esc(x.size || x.desc)}</button>`).join("")}</div></div>` : ""}
           <div class="small">${esc(v.desc)}</div>
-          <div class="row small">Availability: ${avPill(v.avail)}${v.avail === "req" ? '<span class="tiny muted">DHH will confirm supply time</span>' : ""}</div>
           <div class="small muted">Your price is shown in the cart.</div>
           <div class="row wrap"><div class="qty"><button data-pq="-1" aria-label="Less">−</button><span aria-live="polite">${pState.qty}</span><button data-pq="1" aria-label="More">+</button></div>
             <button class="btn primary" style="flex:1;min-width:180px" data-add="${esc(v.mat)}" data-q="${pState.qty}">Add to cart</button></div>
@@ -302,7 +298,7 @@
         <h1 class="display" style="font-size:24px">Cart <span class="muted" style="font-weight:400;font-size:18px">(${cartCount()} items)</span></h1>
         ${gone.length ? `<div class="demo">${gone.length} item${gone.length > 1 ? "s are" : " is"} no longer in the catalog and won't be ordered.</div>` : ""}
         <div class="card list">${lines.map(l => `<div class="stack" style="padding:12px 14px;gap:8px">
-          <div class="row between" style="align-items:flex-start"><div style="min-width:0"><b style="font-size:14.5px">${esc(l.desc)}</b><div class="tiny muted">${esc(l.mat)}</div><div style="margin-top:4px">${avPill(l.avail)}</div></div>
+          <div class="row between" style="align-items:flex-start"><div style="min-width:0"><b style="font-size:14.5px">${esc(l.desc)}</b><div class="tiny muted">${esc(l.mat)}</div></div>
             <div style="text-align:right;white-space:nowrap"><b>${inr(l.price * l.qty)}</b><div class="tiny muted">${inr(l.price)} each</div></div></div>
           <div class="row between"><div class="qty"><button data-iq="${esc(l.mat)}|-1" aria-label="Less">−</button><span>${l.qty}</span><button data-iq="${esc(l.mat)}|1" aria-label="More">+</button></div>
             <button class="btn sm ghost" data-rm="${esc(l.mat)}">Remove</button></div></div>`).join("")}</div>
@@ -479,7 +475,7 @@
   document.addEventListener("input", e => { const f = e.target.dataset && e.target.dataset.f; if (f && D.role === "customer") { cart()[f] = e.target.value; saveCart(); } });
   document.addEventListener("change", e => {
     const d = e.target.dataset || {}; if (D.role !== "customer") return;
-    if (e.target.id === "typesel") { catState.type = e.target.value; nav(e.target.value === "ALL" ? "#catalog" : "#catalog-" + encodeURIComponent(e.target.value)); }
+    if (e.target.id === "typesel" || e.target.name === "ptype") { catState.type = e.target.value; nav(e.target.value === "ALL" ? "#catalog" : "#catalog-" + encodeURIComponent(e.target.value)); }
     if (d.av) { catState.avail[d.av] = e.target.checked; route(); }
   });
   document.addEventListener("submit", async e => {

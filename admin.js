@@ -58,7 +58,7 @@
   function after() {}
 
   /* ---------- catalog publishing (selling price only, never the rate) ---------- */
-  const CALC = 2;   // price formula version: rate + sell % (same as D Cart)
+  const CALC = 3;   // price formula version: rate + sell % (same as D Cart)
   // Re-make the customer price list by itself if it was made with an older formula, or came out empty while priced products exist.
   function checkCatalog() {
     if (!A.prodLoaded || !A.catLoaded || A.checking) return;
@@ -72,7 +72,7 @@
     const low = +A.settings.lowAt || 0;
     const list = A.products.filter(p => p.code && p.desc && !p.hidden && sellOf(p) > 0).map(p => {
       const { family, size } = splitSize(p.desc); const st = +p.stock || 0;
-      return { mat: String(p.code), desc: String(p.desc), family, size, type: p.type || guessType(p.desc), uom: String(p.uom || ""), hsn: String(p.hsn || ""), price: sellOf(p), avail: st > low ? "ok" : st > 0 ? "low" : "req", ...(p.img ? { img: p.img } : {}) };
+      return { mat: String(p.code), desc: String(p.desc), family, size, type: p.type || guessType(p.desc), uom: String(p.uom || ""), hsn: String(p.hsn || ""), price: sellOf(p), ...(p.img ? { img: p.img } : {}) };
     }).sort((a, b) => a.type.localeCompare(b.type) || a.family.localeCompare(b.family) || a.desc.localeCompare(b.desc, undefined, { numeric: true }));
     await fs.doc("catalog/main").set({ list, count: list.length, calc: CALC, gstPct: +A.settings.gstPct || 0, payTo: A.settings.payTo || "", updatedAt: nowIso() });
   }
@@ -238,9 +238,9 @@
     const shown = all.filter(x => !x.p.hidden && sellOf(x.p) > 0).length;
     return `<div class="stack" style="gap:14px">
       <div class="row between wrap"><h1 class="display" style="font-size:24px">Products</h1><div class="row wrap"><button class="btn primary" data-aupload>Upload Excel</button><button class="btn ghost" data-aexport="products">Download Excel</button><button class="btn ghost" data-aaddprod>+ Product</button></div></div>
-      <div class="small muted">Customers see each product's <b>selling price = Rate + ${num(A.settings.sellPct)}%</b> (or your own price if you fill one in), less their discount, and availability: In stock (more than ${low}), Low (1–${low}) or On request (0). Rates and stock counts are never shown to customers.
+      <div class="small muted">Customers see each product's <b>selling price = Rate + ${num(A.settings.sellPct)}%</b> (or your own price if you fill one in), less their discount. Customers don't see stock or availability: they just add what they need, and you confirm supply on the order. Rates and stock counts are never shown to customers.
         ${A.catalogInfo ? ` Published: ${A.catalogInfo.count} products, ${fmtDT(A.catalogInfo.at)}.` : " Not published yet."}</div>
-      ${A.feed ? `<div class="card pad small stack" style="gap:4px;border-color:var(--brand)"><div><b>Products and rates come from D Cart automatically</b> (last update ${fmtDT(A.feed.updatedAt)}, ${A.feed.count} products, <b>${(A.feed.list || []).filter(f => +f.rate > 0).length}</b> with a rate). Customers see Rate + ${num(A.settings.sellPct)}% (same as D Cart's Sell %). A rate you type here is replaced when D Cart's rate changes, so to fix a price for a product, use <b>Own price</b>. Enter <b>Stock</b> here so customers see In stock / Low.</div>${(() => { const nNew = A.products.filter(p => p.isNew).length, nNo = A.products.filter(p => !p.hidden && !(sellOf(p) > 0)).length; return `${nNew ? `<div><b>${nNew}</b> new from D Cart · <button class="btn sm ghost" data-aonly="new">Show them</button> <button class="btn sm ghost" data-aseen>Mark as seen</button></div>` : ""}${nNo ? `<div class="tiny muted">${nNo} products have no price yet, so customers don't see them.</div>` : ""}`; })()}</div>` : `<div class="tiny muted">Tip: connect D Cart (D Cart → Admin panel → D Shop link) and product names and sizes arrive here automatically.</div>`}
+      ${A.feed ? `<div class="card pad small stack" style="gap:4px;border-color:var(--brand)"><div><b>Products and rates come from D Cart automatically</b> (last update ${fmtDT(A.feed.updatedAt)}, ${A.feed.count} products, <b>${(A.feed.list || []).filter(f => +f.rate > 0).length}</b> with a rate). Customers see Rate + ${num(A.settings.sellPct)}% (same as D Cart's Sell %). A rate you type here is replaced when D Cart's rate changes, so to fix a price for a product, use <b>Own price</b>. Stock here is for your own use only.</div>${(() => { const nNew = A.products.filter(p => p.isNew).length, nNo = A.products.filter(p => !p.hidden && !(sellOf(p) > 0)).length; return `${nNew ? `<div><b>${nNew}</b> new from D Cart · <button class="btn sm ghost" data-aonly="new">Show them</button> <button class="btn sm ghost" data-aseen>Mark as seen</button></div>` : ""}${nNo ? `<div class="tiny muted">${nNo} products have no price yet, so customers don't see them.</div>` : ""}`; })()}</div>` : `<div class="tiny muted">Tip: connect D Cart (D Cart → Admin panel → D Shop link) and product names and sizes arrive here automatically.</div>`}
       ${msgBox()}
       <div class="row wrap"><input type="search" class="inp" data-aprod="q" placeholder="Search code or description…" value="${esc(V.q)}" style="flex:1;min-width:200px">
         <select data-aprod="type" aria-label="Product type"><option value="">All types</option>${types.map(t => `<option ${V.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>

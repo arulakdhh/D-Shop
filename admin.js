@@ -27,7 +27,7 @@
   }
   function splitSize(desc) { const s = String(desc || "").trim(); const m = s.match(/^(.*?)[\s,]*\bL\s?(\d+(?:\.\d+)?)\s*(MM)?$/i); return m && m[1].length >= 6 ? { family: m[1].trim(), size: "L" + m[2] } : { family: s, size: "" }; }
   const custName = cid => (A.customers[cid] || {}).name || "(removed customer)";
-  const sellOf = p => +p.price > 0 ? r2(+p.price) : r2((+p.rate || 0) * (+A.settings.sellPct || 0) / 100);
+  const sellOf = p => +p.price > 0 ? r2(+p.price) : r2((+p.rate || 0) * (1 + (+A.settings.sellPct || 0) / 100));
   const isOpen = o => ["sent", "confirmed", "dispatched", "delivered"].includes(o.status);
   const ordersArr = () => Object.entries(A.orders).map(([id, o]) => ({ id, ...o })).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   const custOutstanding = cid => ordersArr().filter(o => o.cid === cid).reduce((n, o) => n + orderBalance(o, A.payments), 0);
@@ -191,7 +191,7 @@
     const loginsOf = cid => Object.entries(A.logins).filter(([, l]) => l.cid === cid).map(([id, l]) => ({ id, ...l, u: A.users[l.uid] || {} }));
     return `<div class="stack" style="gap:16px">
       <div class="row between wrap"><h1 class="display" style="font-size:24px">Customers</h1><button class="btn primary" data-anewcust>+ New customer</button></div>
-      <div class="small muted">Discount % comes off every product in the customer's cart (on Rate × ${num(A.settings.sellPct)}%), before ${num(A.settings.gstPct)}% GST. A new login gets a temporary password; the customer sets their own at first sign-in.</div>
+      <div class="small muted">Discount % comes off every product in the customer's cart (Rate + ${num(A.settings.sellPct)}%), before ${num(A.settings.gstPct)}% GST. A new login gets a temporary password; the customer sets their own at first sign-in.</div>
       ${msgBox()}
       <input type="search" class="inp" data-acust="q" placeholder="Search customer or login ID…" value="${esc(V.q)}">
       <div class="card scrollx"><table class="tbl"><thead><tr><th>Customer</th><th>Type</th><th class="num">Discount %</th><th class="num">Credit days</th><th class="num">Outstanding</th><th>Logins</th></tr></thead><tbody>
@@ -215,9 +215,9 @@
     const shown = all.filter(x => !x.p.hidden && sellOf(x.p) > 0).length;
     return `<div class="stack" style="gap:14px">
       <div class="row between wrap"><h1 class="display" style="font-size:24px">Products</h1><div class="row wrap"><button class="btn primary" data-aupload>Upload Excel</button><button class="btn ghost" data-aexport="products">Download Excel</button><button class="btn ghost" data-aaddprod>+ Product</button></div></div>
-      <div class="small muted">Customers see each product's <b>selling price = Rate × ${num(A.settings.sellPct)}%</b> (or your own price if you fill one in), less their discount, and availability: In stock (more than ${low}), Low (1–${low}) or On request (0). Rates and stock counts are never shown to customers.
+      <div class="small muted">Customers see each product's <b>selling price = Rate + ${num(A.settings.sellPct)}%</b> (or your own price if you fill one in), less their discount, and availability: In stock (more than ${low}), Low (1–${low}) or On request (0). Rates and stock counts are never shown to customers.
         ${A.catalogInfo ? ` Published: ${A.catalogInfo.count} products, ${fmtDT(A.catalogInfo.at)}.` : " Not published yet."}</div>
-      ${A.feed ? `<div class="card pad small stack" style="gap:4px;border-color:var(--brand)"><div><b>Products and rates come from D Cart automatically</b> (last update ${fmtDT(A.feed.updatedAt)}, ${A.feed.count} products). Customers see Rate × ${num(A.settings.sellPct)}%. A rate you type here is replaced when D Cart's rate changes, so to fix a price for a product, use <b>Own price</b>. Enter <b>Stock</b> here so customers see In stock / Low.</div>${(() => { const nNew = A.products.filter(p => p.isNew).length, nNo = A.products.filter(p => !p.hidden && !(sellOf(p) > 0)).length; return `${nNew ? `<div><b>${nNew}</b> new from D Cart · <button class="btn sm ghost" data-aonly="new">Show them</button> <button class="btn sm ghost" data-aseen>Mark as seen</button></div>` : ""}${nNo ? `<div class="tiny muted">${nNo} products have no price yet, so customers don't see them.</div>` : ""}`; })()}</div>` : `<div class="tiny muted">Tip: connect D Cart (D Cart → Admin panel → D Shop link) and product names and sizes arrive here automatically.</div>`}
+      ${A.feed ? `<div class="card pad small stack" style="gap:4px;border-color:var(--brand)"><div><b>Products and rates come from D Cart automatically</b> (last update ${fmtDT(A.feed.updatedAt)}, ${A.feed.count} products). Customers see Rate + ${num(A.settings.sellPct)}% (same as D Cart's Sell %). A rate you type here is replaced when D Cart's rate changes, so to fix a price for a product, use <b>Own price</b>. Enter <b>Stock</b> here so customers see In stock / Low.</div>${(() => { const nNew = A.products.filter(p => p.isNew).length, nNo = A.products.filter(p => !p.hidden && !(sellOf(p) > 0)).length; return `${nNew ? `<div><b>${nNew}</b> new from D Cart · <button class="btn sm ghost" data-aonly="new">Show them</button> <button class="btn sm ghost" data-aseen>Mark as seen</button></div>` : ""}${nNo ? `<div class="tiny muted">${nNo} products have no price yet, so customers don't see them.</div>` : ""}`; })()}</div>` : `<div class="tiny muted">Tip: connect D Cart (D Cart → Admin panel → D Shop link) and product names and sizes arrive here automatically.</div>`}
       ${msgBox()}
       <div class="row wrap"><input type="search" class="inp" data-aprod="q" placeholder="Search code or description…" value="${esc(V.q)}" style="flex:1;min-width:200px">
         <select data-aprod="type" aria-label="Product type"><option value="">All types</option>${types.map(t => `<option ${V.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>
@@ -255,8 +255,8 @@
     const s = A.settings;
     return `<div class="stack" style="gap:16px;max-width:640px"><h1 class="display" style="font-size:24px">Settings</h1>${msgBox()}
       <form id="asettings" class="card pad stack" novalidate>
-        <label class="field">Selling price = Rate × this % <input name="sellPct" type="number" min="0" step="1" value="${esc(s.sellPct)}"></label>
-        <div class="tiny muted">200 means Rate × 2 (a ₹4,000 rate sells at ₹8,000). A product's own price, if filled in, wins.</div>
+        <label class="field">Sell % added on the rate (same as D Cart's Sell %)<input name="sellPct" type="number" min="0" step="1" value="${esc(s.sellPct)}"></label>
+        <div class="tiny muted">200 means the rate plus 200%: a ₹150 rate sells at ₹450, a ₹4,000 rate at ₹12,000 (Rate × 3). A product's own price, if filled in, wins.</div>
         <div class="grid two"><label class="field">GST % added at checkout<input name="gstPct" type="number" min="0" max="28" step="0.5" value="${esc(s.gstPct)}"></label>
           <label class="field">"Low" when stock is at or below<input name="lowAt" type="number" min="0" step="1" value="${esc(s.lowAt)}"></label></div>
         <label class="field">Default credit days (due date on invoices)<input name="creditDays" type="number" min="0" max="365" step="1" value="${esc(s.creditDays)}"></label>

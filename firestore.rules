@@ -25,6 +25,11 @@ service cloud.firestore {
     // What customers see: selling price and availability band only.
     match /catalog/{doc} { allow read: if isAdmin() || custActive(); allow write: if isAdmin(); }
 
+    // product photos (one per product family) — customers may look, only the admin changes them
+    match /images/{key} {
+      allow read: if isAdmin() || custActive();
+      allow write: if isAdmin();
+    }
     match /customers/{cid} {
       allow read: if isAdmin() || (custActive() && myCid() == cid);
       allow write: if isAdmin();

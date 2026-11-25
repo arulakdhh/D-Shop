@@ -72,7 +72,7 @@
     const low = +A.settings.lowAt || 0;
     const list = A.products.filter(p => p.code && p.desc && !p.hidden && sellOf(p) > 0).map(p => {
       const { family, size } = splitSize(p.desc); const st = +p.stock || 0;
-      return { mat: String(p.code), desc: String(p.desc), family, size, type: p.type || guessType(p.desc), uom: String(p.uom || ""), hsn: String(p.hsn || ""), price: sellOf(p), avail: st > low ? "ok" : st > 0 ? "low" : "req" };
+      return { mat: String(p.code), desc: String(p.desc), family, size, type: p.type || guessType(p.desc), uom: String(p.uom || ""), hsn: String(p.hsn || ""), price: sellOf(p), avail: st > low ? "ok" : st > 0 ? "low" : "req", ...(p.img ? { img: p.img } : {}) };
     }).sort((a, b) => a.type.localeCompare(b.type) || a.family.localeCompare(b.family) || a.desc.localeCompare(b.desc, undefined, { numeric: true }));
     await fs.doc("catalog/main").set({ list, count: list.length, calc: CALC, gstPct: +A.settings.gstPct || 0, payTo: A.settings.payTo || "", updatedAt: nowIso() });
   }
@@ -247,8 +247,8 @@
         <span class="small muted">${f.length} of ${A.products.length} · ${shown} shown to customers</span>
         ${f.length && f.length < A.products.length ? `<span class="row" style="gap:6px"><input class="inp sm num" type="number" min="0" step="0.01" id="abulkrate" value="${esc(V.bulkRate || "")}" placeholder="Rate" aria-label="Rate for all products shown"><button class="btn sm" data-abulk="rate">Set rate for these ${f.length}</button><input class="inp sm num" type="number" step="1" id="abulkstock" value="${esc(V.bulkStock || "")}" placeholder="Stock" aria-label="Stock for all products shown"><button class="btn sm ghost" data-abulk="stock">Set stock</button></span>` : ""}
         ${pages > 1 ? `<button class="btn sm ghost" data-apg="-1" ${V.page ? "" : "disabled"}>‹</button><span class="small">${V.page + 1}/${pages}</span><button class="btn sm ghost" data-apg="1" ${V.page < pages - 1 ? "" : "disabled"}>›</button>` : ""}</div>
-      ${A.products.length ? `<div class="card scrollx"><table class="tbl"><thead><tr><th>Show</th><th>Code</th><th>Description</th><th>Type</th><th class="num">Stock</th><th class="num">Rate (₹)</th><th class="num">Own price (₹)</th><th class="num">Selling price</th><th></th></tr></thead><tbody>
-        ${pg.map(({ p, i, type }) => `<tr><td><input type="checkbox" data-ashow="${i}" ${p.hidden ? "" : "checked"} aria-label="Show ${esc(p.desc)}"></td><td class="mono">${esc(p.code)}</td><td style="min-width:220px">${esc(p.desc)}${p.isNew ? ' <span class="pill av-low">New</span>' : ""}${p.notInDcart ? ' <span class="pill st-callback">Not in D Cart</span>' : ""}</td>
+      ${A.products.length ? `<div class="card scrollx"><table class="tbl"><thead><tr><th>Show</th><th>Photo</th><th>Code</th><th>Description</th><th>Type</th><th class="num">Stock</th><th class="num">Rate (₹)</th><th class="num">Own price (₹)</th><th class="num">Selling price</th><th></th></tr></thead><tbody>
+        ${pg.map(({ p, i, type }) => `<tr><td><input type="checkbox" data-ashow="${i}" ${p.hidden ? "" : "checked"} aria-label="Show ${esc(p.desc)}"></td><td><button class="apicbtn thumb" data-apic="${i}" title="${p.img ? "Change photo" : "Add a photo"}" aria-label="Photo for ${esc(p.desc)}">${S.pic(type, p.img)}</button></td><td class="mono">${esc(p.code)}</td><td style="min-width:220px">${esc(p.desc)}${p.isNew ? ' <span class="pill av-low">New</span>' : ""}${p.notInDcart ? ' <span class="pill st-callback">Not in D Cart</span>' : ""}</td>
           <td><select data-atype="${i}" aria-label="Type">${types.map(t => `<option ${type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></td>
           <td class="num"><input class="inp sm num" type="number" step="1" value="${esc(p.stock ?? 0)}" data-astock="${i}" aria-label="Stock"></td>
           <td class="num"><input class="inp sm num" type="number" step="0.01" min="0" value="${esc(p.rate ?? "")}" data-arate="${i}" aria-label="Rate"></td>
@@ -384,12 +384,54 @@
   }
 
   /* ---------- events ---------- */
+  /* ---------- product photos (one per product family: all sizes share it) ---------- */
+  const famOf = p => splitSize(p.desc).family;
+  const famKey = fam => { let h = 5381; const t = String(fam || "").trim().toLowerCase(); for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0; return "f" + h.toString(36); };
+  function shrink(blob) {
+    return new Promise((ok, bad) => { const u = URL.createObjectURL(blob); const im = new Image();
+      im.onload = () => { const max = 600, sc = Math.min(1, max / Math.max(im.width, im.height)); const c = document.createElement("canvas"); c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc);
+        const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+        let q = 0.82, d = c.toDataURL("image/jpeg", q); while (d.length > 300000 && q > 0.4) { q -= 0.1; d = c.toDataURL("image/jpeg", q); } ok(d); };
+      im.onerror = () => { URL.revokeObjectURL(u); bad(new Error("That file isn't a picture this browser can open. Use a JPG or PNG.")); }; im.src = u; });
+  }
+  let picFor = null;
+  function picDialog(i) {
+    const p = A.products[i]; if (!p) return; const fam = famOf(p); const n = A.products.filter(x => famOf(x) === fam).length; picFor = { fam, key: famKey(fam), type: p.type || guessType(p.desc) };
+    const q = encodeURIComponent(fam + " orthopaedic implant");
+    modal(`<div class="stack" style="gap:12px" id="apicdlg"><div class="row between"><h2 class="display" style="font-size:20px">Product photo</h2><button class="btn sm ghost" data-close>Close</button></div>
+      <div class="small"><b>${esc(fam)}</b><br><span class="muted">Shown to customers for all ${n} size${n > 1 ? "s" : ""} of this product.</span></div>
+      <div class="thumb" style="height:200px;overflow:hidden" id="apicprev">${S.pic(picFor.type, p.img)}</div>
+      <div class="row wrap"><button class="btn primary" data-apicup>Upload photo</button>${p.img ? `<button class="btn ghost" data-apicdel>Remove photo</button>` : ""}<a class="btn ghost" href="https://www.google.com/search?tbm=isch&q=${q}" target="_blank" rel="noopener">Find one online ↗</a></div>
+      <div class="tiny muted">Or copy a picture and press <b>Ctrl + V</b> here. Use your own photos or ones your supplier lets you use. Pictures are made smaller automatically.</div>
+      <div id="apicmsg" class="small"></div></div>`);
+  }
+  async function savePic(blob) {
+    if (!picFor) return; const m = $("#apicmsg"); if (m) m.textContent = "Saving…";
+    const data = await shrink(blob); const { key, fam } = picFor;
+    await fs.doc("images/" + key).set({ data, family: fam, updatedAt: nowIso() });
+    S.IMG[key] = data; A.products.forEach(x => { if (famOf(x) === fam) x.img = key; });
+    await saveProducts(true); closeModal(); toast("Photo saved. Customers see it now."); route();
+  }
+  async function removePic() {
+    if (!picFor) return; const { key, fam } = picFor;
+    A.products.forEach(x => { if (famOf(x) === fam) delete x.img; }); await saveProducts(true);
+    await fs.doc("images/" + key).delete().catch(() => {}); delete S.IMG[key]; closeModal(); toast("Photo removed."); route();
+  }
+  document.addEventListener("paste", e => {
+    if (D.role !== "admin" || !$("#apicdlg")) return; const f = [...(e.clipboardData || {}).items || []].find(x => x.type && x.type.startsWith("image/"));
+    if (!f) { const m = $("#apicmsg"); if (m) m.textContent = "No picture found in what you copied. Right-click a picture → Copy image, then press Ctrl + V."; return; }
+    e.preventDefault(); savePic(f.getAsFile()).catch(err => { const m = $("#apicmsg"); if (m) m.textContent = niceErr(err); });
+  });
+
   document.addEventListener("click", async e => {
     if (D.role !== "admin") return;
     const b = e.target.closest("button,a[data-acopy]"); if (!b) return; const d = b.dataset;
     try {
       if (d.aact) { const id = b.closest("[data-order]").dataset.order; return orderAction(id, d.aact); }
       if (d.avoid) { if (!d.sure) { d.sure = 1; b.textContent = "Click again to remove"; return; } await fs.doc("payments/" + d.avoid).update({ status: "void", voidAt: nowIso() }); return toast("Payment removed."); }
+      if (d.apic) return picDialog(+d.apic);
+      if (d.apicup !== undefined) { const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.onchange = () => inp.files[0] && savePic(inp.files[0]).catch(err => { const m = $("#apicmsg"); if (m) m.textContent = niceErr(err); }); inp.click(); return; }
+      if (d.apicdel !== undefined) return removePic();
       if (d.aexport) return exportXlsx(d.aexport);
       if (d.aupload !== undefined) return uploadDialog();
       if (d.auimport !== undefined) return doImport();

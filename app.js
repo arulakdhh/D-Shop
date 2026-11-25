@@ -33,6 +33,43 @@
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
     back: '<path d="m15 18-6-6 6-6"/>', doc: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>'
   };
+  /* ---------- product pictures: a drawing per product type, or the admin's photo ---------- */
+  const ART = {
+    screw: '<path d="M30 14h40v10H30z"/><path d="M38 24h24"/><path d="M42 24v58l8 12 8-12V24"/><path d="M42 34l16 6M42 44l16 6M42 54l16 6M42 64l16 6M42 74l14 6"/><path d="M44 19h12"/>',
+    lockscrew: '<path d="M32 12h36l-4 14H36z"/><path d="M36 18l2 3 2-3 2 3 2-3 2 3 2-3 2 3 2-3 2 3 2-3 2 3 2-3 2 3 2-3"/><path d="M42 26v56l8 12 8-12V26"/><path d="M42 36l16 6M42 46l16 6M42 56l16 6M42 66l16 6M42 76l14 6"/>',
+    cannu: '<path d="M30 14h40v10H30z"/><path d="M42 24v24h16V24"/><path d="M42 48v34l8 12 8-12V48"/><path d="M42 58l16 6M42 68l16 6M42 78l14 6"/><path d="M50 14v80" stroke-dasharray="3 3"/>',
+    bolt: '<path d="M32 12h36v14H32z"/><path d="M42 26v66h16V26"/><path d="M42 70l16 5M42 78l16 5M42 86l16 5"/>',
+    plate: '<g transform="rotate(-25 50 50)"><rect x="6" y="37" width="88" height="26" rx="13"/><circle cx="20" cy="50" r="5"/><circle cx="35" cy="50" r="5"/><circle cx="50" cy="50" r="5"/><circle cx="65" cy="50" r="5"/><circle cx="80" cy="50" r="5"/></g>',
+    nail: '<path d="M44 8h12v8l-2 70-4 8-4-8-2-70z"/><circle cx="50" cy="30" r="2.5"/><circle cx="50" cy="66" r="2.5"/><path d="M47 16h6"/>',
+    washer: '<circle cx="50" cy="50" r="30"/><circle cx="50" cy="50" r="12"/><path d="M28 64c8 10 36 10 44 0"/>',
+    hip: '<circle cx="62" cy="22" r="13"/><path d="M54 32l-10 14c-4 6-6 12-6 20l2 28h10l2-26c1-8 4-14 10-20l8-8"/><path d="M58 36l6 6"/>',
+    stent: '<rect x="22" y="36" width="56" height="28" rx="14"/><path d="M30 36l8 28M38 36l-8 28M46 36l8 28M54 36l-8 28M62 36l8 28M70 36l-8 28"/>',
+    catheter: '<path d="M14 80c20 0 20-20 36-20s16-40 36-40"/><path d="M80 14l8 6-6 8"/><circle cx="14" cy="80" r="5"/>',
+    wire: '<path d="M10 70c10-30 20 30 30 0s20 30 30 0 14-20 20-30"/><circle cx="90" cy="40" r="3"/>',
+    suture: '<path d="M26 74c0-30 20-50 48-50"/><path d="M74 24l-8-4 2 8z"/><path d="M26 74c-6 6 0 14 8 10s4-14-2-10"/>',
+    kit: '<path d="M38 12h24M42 12v52a8 8 0 0016 0V12"/><path d="M42 44h16"/><rect x="20" y="70" width="60" height="18" rx="4"/>',
+    box: '<path d="M20 34l30-14 30 14v34L50 82 20 68z"/><path d="M20 34l30 14 30-14M50 48v34"/>',
+  };
+  function artOf(type) {
+    const t = String(type || "").toLowerCase(); let k = "box";
+    if (/lock/.test(t)) k = "lockscrew"; else if (/cancell|cannul/.test(t)) k = "cannu"; else if (/cortex/.test(t)) k = "screw"; else if (/screw|bolt/.test(t)) k = "bolt";
+    else if (/plate/.test(t)) k = "plate"; else if (/nail/.test(t)) k = "nail"; else if (/washer/.test(t)) k = "washer"; else if (/hip|joint/.test(t)) k = "hip";
+    else if (/stent/.test(t)) k = "stent"; else if (/balloon|sheath|catheter/.test(t)) k = "catheter"; else if (/wire/.test(t)) k = "wire"; else if (/stapl|suture/.test(t)) k = "suture"; else if (/test|kit/.test(t)) k = "kit";
+    return `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:72%;height:72%;max-width:150px;max-height:150px">${ART[k]}</svg>`;
+  }
+  // a picture box: shows the admin's photo when there is one, otherwise the type drawing
+  const pic = (type, img) => img ? `<span class="picbox" data-imgk="${esc(img)}">${artOf(type)}</span>` : artOf(type);
+  const IMG = {}; // key → data URL | "" (none) | Promise
+  function loadPics() {
+    document.querySelectorAll("[data-imgk]:not([data-done])").forEach(el => {
+      const k = el.getAttribute("data-imgk"); el.setAttribute("data-done", "1");
+      const put = u => { if (u) el.innerHTML = `<img src="${u}" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:inherit">`; };
+      if (typeof IMG[k] === "string") return put(IMG[k]);
+      if (!IMG[k]) IMG[k] = fs.doc("images/" + k).get().then(s => (IMG[k] = s.exists ? s.data().data || "" : "")).catch(() => (IMG[k] = ""));
+      Promise.resolve(IMG[k]).then(() => put(typeof IMG[k] === "string" ? IMG[k] : ""));
+    });
+  }
+  let picT = null; new MutationObserver(() => { clearTimeout(picT); picT = setTimeout(loadPics, 60); }).observe(document.documentElement, { childList: true, subtree: true });
   const ico = (n, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${ICON[n]}</svg>`;
   const SHORT = t => (t || "?").split(/[\s&]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 
@@ -122,7 +159,7 @@
   function families() {
     if (D.fam) return D.fam; const m = new Map();
     for (const it of items()) { const k = it.type + "|" + it.family; if (!m.has(k)) m.set(k, { key: k, type: it.type, name: it.family, items: [] }); m.get(k).items.push(it); }
-    for (const f of m.values()) { f.items.sort((a, b) => a.desc.localeCompare(b.desc, undefined, { numeric: true })); f.avail = f.items.some(i => i.avail === "ok") ? "ok" : f.items.some(i => i.avail === "low") ? "low" : "req"; f.id = encodeURIComponent(f.key); }
+    for (const f of m.values()) { f.img = (f.items.find(i => i.img) || {}).img || ""; f.items.sort((a, b) => a.desc.localeCompare(b.desc, undefined, { numeric: true })); f.avail = f.items.some(i => i.avail === "ok") ? "ok" : f.items.some(i => i.avail === "low") ? "low" : "req"; f.id = encodeURIComponent(f.key); }
     D.fam = [...m.values()].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name, undefined, { numeric: true }));
     return D.fam;
   }
@@ -200,7 +237,7 @@
       <div><h1 class="display" style="font-size:26px">Hello, ${esc(D.me.name || D.me.loginId)}</h1><div class="muted small">${esc(cu.name || "")}${cu.type ? " · " + esc((TYPES[cu.type] || {}).label || "") : ""}</div></div>
       <div class="grid kpis">${k.join("")}</div>
       <section class="stack"><div class="row between"><h2>Products</h2><a href="#catalog" class="small strong">Full catalog</a></div>
-        ${items().length ? `<div class="grid types">${typesList().map(t => { const n = families().filter(f => f.type === t).length; return `<a href="#catalog-${encodeURIComponent(t)}" class="card pad row"><span class="thumb" style="width:42px;height:42px;font-size:13px;flex-shrink:0">${SHORT(t)}</span><span><b class="tname">${esc(t)}</b><span class="tiny muted">${n} product${n > 1 ? "s" : ""}</span></span></a>`; }).join("")}</div>` : `<div class="card empty">The catalog is being prepared. Please check again soon.</div>`}</section>
+        ${items().length ? `<div class="grid types">${typesList().map(t => { const n = families().filter(f => f.type === t).length; return `<a href="#catalog-${encodeURIComponent(t)}" class="card pad row"><span class="thumb" style="width:46px;height:46px;flex-shrink:0">${artOf(t)}</span><span><b class="tname">${esc(t)}</b><span class="tiny muted">${n} product${n > 1 ? "s" : ""}</span></span></a>`; }).join("")}</div>` : `<div class="card empty">The catalog is being prepared. Please check again soon.</div>`}</section>
       ${recent.length ? `<section class="stack"><h2>Order again</h2><div class="card list">${recent.slice(0, 5).map(m => { const it = item(m); return `<div class="row" style="padding:10px 14px"><div style="flex:1;min-width:0"><b class="small">${esc(it.desc)}</b><div class="tiny muted">${esc(it.mat)}</div></div>${avPill(it.avail)}<button class="btn sm" data-add="${esc(m)}" aria-label="Add ${esc(it.desc)} to cart">+ Add</button></div>`; }).join("")}</div></section>` : ""}
     </div>`;
   }
@@ -220,7 +257,7 @@
       <section class="content stack">
         <div class="row between wrap"><h1 class="display" style="font-size:24px">${title}</h1><span class="small muted">${list.length} product${list.length === 1 ? "" : "s"}</span></div>
         ${list.length ? `<div class="grid cards">${list.slice(0, 240).map(f => `<div class="card pad stack" style="gap:8px">
-          <a href="#product-${f.id}" class="thumb" style="height:90px;font-size:22px" aria-hidden="true" tabindex="-1">${SHORT(f.type)}</a>
+          <a href="#product-${f.id}" class="thumb" style="height:120px;overflow:hidden" aria-hidden="true" tabindex="-1">${pic(f.type, f.img)}</a>
           <a href="#product-${f.id}" class="pname">${esc(f.name)}</a>
           <div class="tiny muted">${esc(f.type)}${f.items.length > 1 ? ` · ${f.items.length} sizes` : ""}</div>
           <div>${avPill(f.avail)}</div>
@@ -235,7 +272,7 @@
     return `<div class="stack" style="gap:18px;max-width:900px">
       <a href="#catalog-${encodeURIComponent(f.type)}" class="row small strong" style="gap:4px">${ico("back", 18)}${esc(f.type)}</a>
       <div class="layout">
-        <div class="thumb" style="flex:1 1 260px;height:220px;font-size:34px" aria-hidden="true">${SHORT(f.type)}</div>
+        <div class="thumb" style="flex:1 1 260px;height:240px;overflow:hidden" aria-hidden="true">${pic(f.type, f.img)}</div>
         <div class="stack" style="flex:1 1 320px;gap:14px">
           <h1 class="display" style="font-size:24px;line-height:1.2">${esc(f.name)}</h1>
           <div class="small muted">Code ${esc(v.mat)}${v.hsn ? " · HSN " + esc(v.hsn) : ""}${v.uom ? " · per " + esc(v.uom) : ""}</div>
@@ -502,5 +539,5 @@
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); D.installEvt = e; });
   if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 
-  window.DS = { D, fs, auth, cfg, DOMAIN, $, esc, r2, inr, num, fmtDate, fmtDT, today, addDays, daysBetween, nowIso, AV, avPill, ST, stPill, FLOW, TYPES, ico, totals, totalsHtml, orderBalance, duesOf, timelineHtml, toast, modal, closeModal, route, nav, niceErr, strong, vAccount, rr, stopSubs };
+  window.DS = { artOf, pic, IMG, D, fs, auth, cfg, DOMAIN, $, esc, r2, inr, num, fmtDate, fmtDT, today, addDays, daysBetween, nowIso, AV, avPill, ST, stPill, FLOW, TYPES, ico, totals, totalsHtml, orderBalance, duesOf, timelineHtml, toast, modal, closeModal, route, nav, niceErr, strong, vAccount, rr, stopSubs };
 })();

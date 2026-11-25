@@ -39,7 +39,8 @@
     S.stopSubs(); D.state = "app";
     const col = (name, key) => D.unsubs.push(fs.collection(name).onSnapshot(s => { A[key] = {}; s.docs.forEach(d => A[key][d.id] = d.data()); S.rr(); }, e => { D.err = niceErr(e); S.rr(); }));
     col("customers", "customers"); col("users", "users"); col("logins", "logins"); col("orders", "orders"); col("payments", "payments"); col("advices", "advices");
-    D.unsubs.push(fs.doc("private/products").onSnapshot(s => { if (!A.saving) A.products = s.exists ? (s.data().list || []) : []; A.prodLoaded = true; S.rr(); }, () => {}));
+    D.unsubs.push(fs.doc("private/products").onSnapshot(s => { if (!A.saving) { A.products = s.exists ? (s.data().list || []) : []; A.feedSig = s.exists ? s.data().feedSig || null : null; } A.prodLoaded = true; mergeFeed(); S.rr(); }, () => {}));
+    D.unsubs.push(fs.doc("private/dcartFeed").onSnapshot(s => { A.feed = s.exists ? s.data() : null; mergeFeed(); S.rr(); }, () => {}));
     D.unsubs.push(fs.doc("config/settings").onSnapshot(s => { if (s.exists) A.settings = { ...A.settings, ...s.data() }; S.rr(); }, () => {}));
     D.unsubs.push(fs.doc("catalog/main").onSnapshot(s => { A.catalogInfo = s.exists ? { count: s.data().count, at: s.data().updatedAt } : null; S.rr(); }, () => {}));
     if (!location.hash || location.hash === "#") history.replaceState(null, "", "#dash");
@@ -70,8 +71,27 @@
   let saveT = null;
   function saveProducts(now) {
     clearTimeout(saveT); A.saving = true;
-    const run = async () => { try { await fs.doc("private/products").set({ list: A.products, count: A.products.length, updatedAt: nowIso() }); await publishCatalog(); } catch (e) { say("bad", "Couldn't save products: " + niceErr(e)); } finally { A.saving = false; } };
+    const run = async () => { try { await fs.doc("private/products").set({ list: A.products, count: A.products.length, feedSig: A.feedSig || null, updatedAt: nowIso() }); await publishCatalog(); } catch (e) { say("bad", "Couldn't save products: " + niceErr(e)); } finally { A.saving = false; } };
     if (now) return run(); saveT = setTimeout(run, 700);
+  }
+
+  /* ---------- product names and sizes sent by D Cart (Admin panel → D Shop link) ---------- */
+  async function mergeFeed() {
+    const F = A.feed; if (!F || !A.prodLoaded || A.merging || !F.sig || F.sig === A.feedSig) return;
+    A.merging = true;
+    try {
+      const idx = new Map(A.products.map((p, i) => [p.code, i])); const inFeed = new Set(); let added = 0, changed = 0;
+      for (const f of F.list || []) {
+        if (!f.code || !f.desc) continue; inFeed.add(f.code);
+        if (idx.has(f.code)) { const p = A.products[idx.get(f.code)]; if (p.desc !== f.desc || (f.hsn && p.hsn !== f.hsn) || (f.uom && p.uom !== f.uom) || p.notInDcart) { p.desc = f.desc; if (f.hsn) p.hsn = f.hsn; if (f.uom) p.uom = f.uom; delete p.notInDcart; changed++; } p.fromDcart = true; }
+        else { A.products.push({ code: f.code, desc: f.desc, hsn: f.hsn || "", uom: f.uom || "", stock: 0, fromDcart: true, isNew: true }); added++; }
+      }
+      for (const p of A.products) if (p.fromDcart && !inFeed.has(p.code) && !p.notInDcart) { p.notInDcart = true; changed++; }
+      A.feedSig = F.sig; A.lastFeed = { added, changed, at: F.updatedAt };
+      await saveProducts(true);
+      if (added) toast(`${added} new product${added > 1 ? "s" : ""} from D Cart. Give ${added > 1 ? "them" : "it"} a rate in Products.`);
+    } catch (e) { say("bad", "Couldn't take in D Cart's product list: " + niceErr(e)); }
+    finally { A.merging = false; }
   }
 
   /* ---------- logins ---------- */
@@ -116,7 +136,7 @@
     const os = ordersArr(); const nNew = os.filter(o => o.status === "sent"); const open = os.filter(isOpen);
     const dues = S.duesOf(A.orders, A.payments); const out = dues.reduce((n, x) => n + x.balance, 0), over = dues.filter(x => x.o.bill.due < today()).reduce((n, x) => n + x.balance, 0);
     const adv = Object.entries(A.advices).filter(([, a]) => (a.status || "new") === "new");
-    const setup = [!A.products.length && ["Upload your products and rates", "#products"], !Object.keys(A.customers).length && ["Create your first customer login", "#customers"], !A.settings.payTo && ["Add your UPI / bank details for customers", "#settings"]].filter(Boolean);
+    const setup = [!A.products.length && ["Connect D Cart (D Cart → Admin panel → D Shop link) or upload products", "#products"], A.products.length && A.products.some(p => !p.hidden && !(sellOf(p) > 0)) && [`Give a rate to ${A.products.filter(p => !p.hidden && !(sellOf(p) > 0)).length} products without a price`, "#products"], !Object.keys(A.customers).length && ["Create your first customer login", "#customers"], !A.settings.payTo && ["Add your UPI / bank details for customers", "#settings"]].filter(Boolean);
     return `<div class="stack" style="gap:18px">
       <h1 class="display" style="font-size:26px">D Shop admin</h1>
       ${setup.length ? `<div class="card pad stack" style="gap:6px;border-color:var(--brand)"><b>Getting started</b>${setup.map(([t, h]) => `<a class="small strong" href="${h}">→ ${t}</a>`).join("")}</div>` : ""}
@@ -189,21 +209,23 @@
     const V = A.v.prod; const q = V.q.toLowerCase(); const low = +A.settings.lowAt || 0;
     const types = [...new Set([...PRODUCT_TYPES, ...A.products.map(p => p.type).filter(Boolean)])];
     const all = A.products.map((p, i) => ({ p, i, type: p.type || guessType(p.desc) }));
-    const f = all.filter(x => (!V.type || x.type === V.type) && (!q || (x.p.code + " " + x.p.desc).toLowerCase().includes(q)) && (V.only !== "hidden" || x.p.hidden) && (V.only !== "noprice" || !(sellOf(x.p) > 0)) && (V.only !== "out" || !(+x.p.stock > 0)));
+    const f = all.filter(x => (!V.type || x.type === V.type) && (!q || (x.p.code + " " + x.p.desc).toLowerCase().includes(q)) && (V.only !== "hidden" || x.p.hidden) && (V.only !== "noprice" || !(sellOf(x.p) > 0)) && (V.only !== "out" || !(+x.p.stock > 0)) && (V.only !== "new" || x.p.isNew) && (V.only !== "gone" || x.p.notInDcart));
     const per = 60, pages = Math.max(1, Math.ceil(f.length / per)); if (V.page >= pages) V.page = pages - 1; const pg = f.slice(V.page * per, V.page * per + per);
     const shown = all.filter(x => !x.p.hidden && sellOf(x.p) > 0).length;
     return `<div class="stack" style="gap:14px">
       <div class="row between wrap"><h1 class="display" style="font-size:24px">Products</h1><div class="row wrap"><button class="btn primary" data-aupload>Upload Excel</button><button class="btn ghost" data-aexport="products">Download Excel</button><button class="btn ghost" data-aaddprod>+ Product</button></div></div>
       <div class="small muted">Customers see each product's <b>selling price = Rate × ${num(A.settings.sellPct)}%</b> (or your own price if you fill one in), less their discount, and availability: In stock (more than ${low}), Low (1–${low}) or On request (0). Rates and stock counts are never shown to customers.
         ${A.catalogInfo ? ` Published: ${A.catalogInfo.count} products, ${fmtDT(A.catalogInfo.at)}.` : " Not published yet."}</div>
+      ${A.feed ? `<div class="card pad small stack" style="gap:4px;border-color:var(--brand)"><div><b>Product names come from D Cart automatically</b> (last update ${fmtDT(A.feed.updatedAt)}, ${A.feed.count} products). Fill in a <b>Rate</b> (or your own price) and <b>Stock</b> here: products without a price stay hidden from customers.</div>${(() => { const nNew = A.products.filter(p => p.isNew).length, nNo = A.products.filter(p => !p.hidden && !(sellOf(p) > 0)).length; return `${nNew ? `<div><b>${nNew}</b> new from D Cart · <button class="btn sm ghost" data-aonly="new">Show them</button> <button class="btn sm ghost" data-aseen>Mark as seen</button></div>` : ""}${nNo ? `<div class="tiny muted">${nNo} products have no price yet, so customers don't see them.</div>` : ""}`; })()}</div>` : `<div class="tiny muted">Tip: connect D Cart (D Cart → Admin panel → D Shop link) and product names and sizes arrive here automatically.</div>`}
       ${msgBox()}
       <div class="row wrap"><input type="search" class="inp" data-aprod="q" placeholder="Search code or description…" value="${esc(V.q)}" style="flex:1;min-width:200px">
         <select data-aprod="type" aria-label="Product type"><option value="">All types</option>${types.map(t => `<option ${V.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>
-        <select data-aprod="only" aria-label="Show"><option value="">All</option><option value="hidden" ${V.only === "hidden" ? "selected" : ""}>Hidden</option><option value="noprice" ${V.only === "noprice" ? "selected" : ""}>No price</option><option value="out" ${V.only === "out" ? "selected" : ""}>Out of stock</option></select>
+        <select data-aprod="only" aria-label="Show"><option value="">All</option><option value="hidden" ${V.only === "hidden" ? "selected" : ""}>Hidden</option><option value="noprice" ${V.only === "noprice" ? "selected" : ""}>No price</option><option value="out" ${V.only === "out" ? "selected" : ""}>Out of stock</option><option value="new" ${V.only === "new" ? "selected" : ""}>New from D Cart</option><option value="gone" ${V.only === "gone" ? "selected" : ""}>No longer in D Cart</option></select>
         <span class="small muted">${f.length} of ${A.products.length} · ${shown} shown to customers</span>
+        ${f.length && f.length < A.products.length ? `<span class="row" style="gap:6px"><input class="inp sm num" type="number" min="0" step="0.01" id="abulkrate" value="${esc(V.bulkRate || "")}" placeholder="Rate" aria-label="Rate for all products shown"><button class="btn sm" data-abulk="rate">Set rate for these ${f.length}</button><input class="inp sm num" type="number" step="1" id="abulkstock" value="${esc(V.bulkStock || "")}" placeholder="Stock" aria-label="Stock for all products shown"><button class="btn sm ghost" data-abulk="stock">Set stock</button></span>` : ""}
         ${pages > 1 ? `<button class="btn sm ghost" data-apg="-1" ${V.page ? "" : "disabled"}>‹</button><span class="small">${V.page + 1}/${pages}</span><button class="btn sm ghost" data-apg="1" ${V.page < pages - 1 ? "" : "disabled"}>›</button>` : ""}</div>
       ${A.products.length ? `<div class="card scrollx"><table class="tbl"><thead><tr><th>Show</th><th>Code</th><th>Description</th><th>Type</th><th class="num">Stock</th><th class="num">Rate (₹)</th><th class="num">Own price (₹)</th><th class="num">Selling price</th><th></th></tr></thead><tbody>
-        ${pg.map(({ p, i, type }) => `<tr><td><input type="checkbox" data-ashow="${i}" ${p.hidden ? "" : "checked"} aria-label="Show ${esc(p.desc)}"></td><td class="mono">${esc(p.code)}</td><td style="min-width:220px">${esc(p.desc)}</td>
+        ${pg.map(({ p, i, type }) => `<tr><td><input type="checkbox" data-ashow="${i}" ${p.hidden ? "" : "checked"} aria-label="Show ${esc(p.desc)}"></td><td class="mono">${esc(p.code)}</td><td style="min-width:220px">${esc(p.desc)}${p.isNew ? ' <span class="pill av-low">New</span>' : ""}${p.notInDcart ? ' <span class="pill st-callback">Not in D Cart</span>' : ""}</td>
           <td><select data-atype="${i}" aria-label="Type">${types.map(t => `<option ${type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></td>
           <td class="num"><input class="inp sm num" type="number" step="1" value="${esc(p.stock ?? 0)}" data-astock="${i}" aria-label="Stock"></td>
           <td class="num"><input class="inp sm num" type="number" step="0.01" min="0" value="${esc(p.rate ?? "")}" data-arate="${i}" aria-label="Rate"></td>
@@ -355,6 +377,16 @@
         <div id="aerr" class="small err"></div><button class="btn primary" type="submit">Add</button></form>`);
       if (d.adelprod) { if (!d.sure) { d.sure = 1; b.textContent = "Sure?"; return; } A.products.splice(+d.adelprod, 1); saveProducts(); return route(); }
       if (d.apg) { A.v.prod.page += +d.apg; return route(); }
+      if (d.abulk) {
+        const V = A.v.prod, q = V.q.toLowerCase(), val = String((d.abulk === "rate" ? V.bulkRate : V.bulkStock) ?? "");
+        if (val === "") return say("bad", d.abulk === "rate" ? "Type the rate first." : "Type the stock first.");
+        const hit = A.products.filter(p => { const ty = p.type || guessType(p.desc); return (!V.type || ty === V.type) && (!q || (p.code + " " + p.desc).toLowerCase().includes(q)) && (V.only !== "hidden" || p.hidden) && (V.only !== "noprice" || !(sellOf(p) > 0)) && (V.only !== "out" || !(+p.stock > 0)) && (V.only !== "new" || p.isNew) && (V.only !== "gone" || p.notInDcart); });
+        if (!hit.length) return say("bad", "No products match the search.");
+        for (const p of hit) { if (d.abulk === "rate") { p.rate = r2(+val); delete p.isNew; } else p.stock = +val || 0; }
+        V.bulkRate = ""; V.bulkStock = ""; await saveProducts(true); toast(`${d.abulk === "rate" ? "Rate ₹" + val : "Stock " + val} set for ${hit.length} products and published.`); return route();
+      }
+      if (d.aonly) { A.v.prod.only = d.aonly; A.v.prod.page = 0; return route(); }
+      if (d.aseen !== undefined) { A.products.forEach(p => delete p.isNew); await saveProducts(true); return route(); }
       if (d.aptab) return nav("#payments-" + d.aptab);
       if (d.anewcust !== undefined) return modal(`<form id="acustform" class="stack"><div class="row between"><h2 style="font-size:18px">New customer and login</h2><button type="button" class="btn sm ghost" data-close>Close</button></div>
         <label class="field">Customer name<input name="name" placeholder="e.g. City Care Hospital, Chennai" required></label>
@@ -377,6 +409,8 @@
     if (D.role !== "admin") return; const d = e.target.dataset || {};
     if (d.aord === "q") { A.v.ord.q = e.target.value; refocus("[data-aord=q]"); }
     if (d.aprod === "q") { A.v.prod.q = e.target.value; A.v.prod.page = 0; refocus("[data-aprod=q]"); }
+    if (e.target.id === "abulkrate") A.v.prod.bulkRate = e.target.value;
+    if (e.target.id === "abulkstock") A.v.prod.bulkStock = e.target.value;
     if (d.acust === "q") { A.v.cust.q = e.target.value; refocus("[data-acust=q]"); }
     if (d.elq || d.elp) { const i = +(d.elq || d.elp); A.editLines[i][d.elq ? "qty" : "price"] = +e.target.value || 0; const id = e.target.closest("[data-editid]").dataset.editid; const o = A.orders[id]; const el = $("#eltot"); if (el) el.innerHTML = `New grand total: <b>${inr(totals(A.editLines.filter(l => l.qty > 0), o.discount, o.gstPct).grand)}</b> (was ${inr((o.totals || {}).grand)})`; }
   });
@@ -399,6 +433,7 @@
         if (d.astock !== undefined) p.stock = +t.value || 0;
         if (d.arate !== undefined) p.rate = t.value === "" ? null : r2(+t.value);
         if (d.aprice !== undefined) p.price = t.value === "" ? null : r2(+t.value);
+        if (d.arate !== undefined || d.aprice !== undefined) delete p.isNew;
         const cell = document.querySelector(`[data-asell="${pi}"]`); if (cell) cell.innerHTML = sellOf(p) > 0 ? inr(sellOf(p)) : '<span class="tiny muted">no price</span>';
         saveProducts();
       }

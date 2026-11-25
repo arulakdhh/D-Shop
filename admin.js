@@ -84,8 +84,20 @@
   }
 
   /* ---------- product names and sizes sent by D Cart (Admin panel → D Shop link) ---------- */
+  // Same list already taken in, but some products still have no rate (e.g. an older
+  // D Shop tab took the list in without rates): fill only the missing ones.
+  async function fillMissingRates(F) {
+    const rates = new Map((F.list || []).filter(f => f.code && +f.rate > 0).map(f => [f.code, r2(+f.rate)]));
+    const miss = A.products.filter(p => !(+p.rate > 0) && rates.has(p.code));
+    if (!miss.length || A.merging) return;
+    A.merging = true;
+    try { for (const p of miss) { p.rate = rates.get(p.code); p.rateFromDcart = true; } await saveProducts(true); toast(`Rates from D Cart added to ${miss.length} product${miss.length > 1 ? "s" : ""}.`); }
+    catch (e) { say("bad", "Couldn't add D Cart's rates: " + niceErr(e)); }
+    finally { A.merging = false; S.rr(); }
+  }
   async function mergeFeed() {
-    const F = A.feed; if (!F || !A.prodLoaded || A.merging || !F.sig || F.sig === A.feedSig || F.sig === A.failedSig) return;
+    const F = A.feed; if (!F || !A.prodLoaded || A.merging || !F.sig || F.sig === A.failedSig) return;
+    if (F.sig === A.feedSig) return fillMissingRates(F);
     A.merging = true;
     try {
       const idx = new Map(A.products.map((p, i) => [p.code, i])); const inFeed = new Set(); let added = 0, changed = 0;

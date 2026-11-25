@@ -194,6 +194,7 @@
     if (["confirmed", "dispatched", "delivered"].includes(o.status)) acts.push(`<button class="btn danger" data-aact="cancel">Cancel</button>`);
     return `<div class="stack" style="max-width:900px;gap:14px" data-order="${esc(id)}">
       <div class="row between noprint"><a href="#orders" class="row small strong" style="gap:4px">${ico("back", 18)}Orders</a><button class="btn sm ghost" data-print>Print</button></div>
+      ${S.letterhead("Order / Quotation", `${esc(o.no)}<br>${fmtDate((o.createdAt || "").slice(0, 10))}<br>${esc(custName(o.cid))}`)}
       <div class="banner"><div class="row between wrap"><h1 class="display" style="font-size:22px">${esc(custName(o.cid))}</h1><span class="sub">${esc(o.no)} · ${S.ST[o.status] ? S.ST[o.status][0] : o.status}</span></div>
         <div class="sub">Placed ${fmtDT(o.createdAt)} by ${esc(o.userName || o.loginId)} · ${esc((TYPES[c.type] || {}).label || "")} · discount ${esc(o.discount)}%</div></div>
       ${msgBox()}

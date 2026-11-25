@@ -70,6 +70,14 @@
     });
   }
   let picT = null; new MutationObserver(() => { clearTimeout(picT); picT = setTimeout(loadPics, 60); }).observe(document.documentElement, { childList: true, subtree: true });
+  /* ---------- DHH letterhead (same details and logo as D Cart's quotations) ---------- */
+  const COMPANY = { name: "Dr. Han Health Care Private Limited", tagline: "Medical Devices Distribution",
+    address: "New No. 26, Old No. 36, Pooram Prakasam Road, Royapettah, Chennai - 600014, Tamil Nadu, India",
+    gstin: "33AAICD8859P1ZS", phone: "+91 91500 87338", email: "drhanhealthcare@gmail.com" };
+  const letterhead = (title, right) => `<div class="card pad letterhead"><img src="logo.png" alt="DHH logo" class="lhlogo"><div style="flex:1;min-width:0">
+      <div class="lhname">${COMPANY.name}</div><div class="tiny" style="color:var(--brand);font-weight:600;text-transform:uppercase;letter-spacing:.5px">${COMPANY.tagline}</div>
+      <div class="tiny muted">${COMPANY.address}</div><div class="tiny muted">GSTIN ${COMPANY.gstin} · ${COMPANY.phone} · ${COMPANY.email}</div></div>
+      ${title ? `<div class="lhdoc"><b>${title}</b>${right ? `<div class="tiny muted">${right}</div>` : ""}</div>` : ""}</div>`;
   const ico = (n, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${ICON[n]}</svg>`;
   const SHORT = t => (t || "?").split(/[\s&]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 
@@ -317,7 +325,7 @@
   function confirmModal() {
     const c = cart(), cu = D.cust || {}, lines = cartLines(), gp = +(D.catalog || {}).gstPct || 0, t = totals(lines, cu.discount, gp);
     modal(`<div class="stack" style="gap:12px">
-      <div class="row between"><h2 class="display" style="font-size:20px">Confirm your order</h2><button class="btn sm ghost" data-close>Back</button></div>
+      <div class="row between"><span class="row" style="gap:10px"><img src="logo.png" alt="" style="width:34px;height:34px"><h2 class="display" style="font-size:20px">Confirm your order</h2></span><button class="btn sm ghost" data-close>Back</button></div>
       <div class="small muted">${esc(cu.name || "")}${c.deliverTo ? " · " + esc(c.deliverTo) : ""}</div>
       <div class="card list small">${lines.map(l => `<div class="row between" style="padding:8px 12px"><span>${esc(l.desc)} × ${l.qty}</span><span style="white-space:nowrap">${inr(l.price * l.qty)}</span></div>`).join("")}</div>
       ${totalsHtml(t, cu.discount, gp)}
@@ -358,6 +366,7 @@
     const t = o.totals || {}; const s = o.surgery || {}; const bal = orderBalance(o, D.payments);
     return `<div class="stack" style="max-width:760px;gap:16px">
       <div class="row between noprint"><a href="#orders" class="row small strong" style="gap:4px">${ico("back", 18)}Orders</a><button class="btn sm" data-print>Print / save as PDF</button></div>
+      ${letterhead(o.status === "billed" ? "Order" : "Order / Quotation", `${esc(o.no || id)}<br>${fmtDate((o.createdAt || "").slice(0, 10))}`)}
       <div class="banner"><div class="row between wrap"><h1 class="display" style="font-size:22px">${ST_CUST[o.status] || o.status}</h1><span class="sub">Order ${esc(o.no || id)}</span></div>
         <div class="sub">${esc([o.deliverTo, s.surgeon, s.patient, s.date ? "surgery " + fmtDate(s.date) : ""].filter(Boolean).join(" · ") || "Placed " + fmtDT(o.createdAt))}</div></div>
       ${timelineHtml(o, true)}
@@ -539,5 +548,5 @@
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); D.installEvt = e; });
   if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 
-  window.DS = { artOf, pic, IMG, D, fs, auth, cfg, DOMAIN, $, esc, r2, inr, num, fmtDate, fmtDT, today, addDays, daysBetween, nowIso, AV, avPill, ST, stPill, FLOW, TYPES, ico, totals, totalsHtml, orderBalance, duesOf, timelineHtml, toast, modal, closeModal, route, nav, niceErr, strong, vAccount, rr, stopSubs };
+  window.DS = { letterhead, COMPANY, artOf, pic, IMG, D, fs, auth, cfg, DOMAIN, $, esc, r2, inr, num, fmtDate, fmtDT, today, addDays, daysBetween, nowIso, AV, avPill, ST, stPill, FLOW, TYPES, ico, totals, totalsHtml, orderBalance, duesOf, timelineHtml, toast, modal, closeModal, route, nav, niceErr, strong, vAccount, rr, stopSubs };
 })();

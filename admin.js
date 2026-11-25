@@ -83,13 +83,14 @@
       const idx = new Map(A.products.map((p, i) => [p.code, i])); const inFeed = new Set(); let added = 0, changed = 0;
       for (const f of F.list || []) {
         if (!f.code || !f.desc) continue; inFeed.add(f.code);
-        if (idx.has(f.code)) { const p = A.products[idx.get(f.code)]; if (p.desc !== f.desc || (f.hsn && p.hsn !== f.hsn) || (f.uom && p.uom !== f.uom) || p.notInDcart) { p.desc = f.desc; if (f.hsn) p.hsn = f.hsn; if (f.uom) p.uom = f.uom; delete p.notInDcart; changed++; } p.fromDcart = true; }
-        else { A.products.push({ code: f.code, desc: f.desc, hsn: f.hsn || "", uom: f.uom || "", stock: 0, fromDcart: true, isNew: true }); added++; }
+        if (idx.has(f.code)) { const p = A.products[idx.get(f.code)]; const fr = +f.rate > 0 ? r2(+f.rate) : null;
+          if (p.desc !== f.desc || (f.hsn && p.hsn !== f.hsn) || (f.uom && p.uom !== f.uom) || p.notInDcart || (fr != null && p.rate !== fr)) { p.desc = f.desc; if (f.hsn) p.hsn = f.hsn; if (f.uom) p.uom = f.uom; if (fr != null) { p.rate = fr; p.rateFromDcart = true; } delete p.notInDcart; changed++; } p.fromDcart = true; }
+        else { const np = { code: f.code, desc: f.desc, hsn: f.hsn || "", uom: f.uom || "", stock: 0, fromDcart: true, isNew: true }; if (+f.rate > 0) { np.rate = r2(+f.rate); np.rateFromDcart = true; } A.products.push(np); added++; }
       }
       for (const p of A.products) if (p.fromDcart && !inFeed.has(p.code) && !p.notInDcart) { p.notInDcart = true; changed++; }
       A.feedSig = F.sig; A.lastFeed = { added, changed, at: F.updatedAt };
       await saveProducts(true);
-      if (added) toast(`${added} new product${added > 1 ? "s" : ""} from D Cart. Give ${added > 1 ? "them" : "it"} a rate in Products.`);
+      if (added) toast(`${added} new product${added > 1 ? "s" : ""} from D Cart, priced automatically.`);
     } catch (e) { say("bad", "Couldn't take in D Cart's product list: " + niceErr(e)); }
     finally { A.merging = false; }
   }
@@ -216,7 +217,7 @@
       <div class="row between wrap"><h1 class="display" style="font-size:24px">Products</h1><div class="row wrap"><button class="btn primary" data-aupload>Upload Excel</button><button class="btn ghost" data-aexport="products">Download Excel</button><button class="btn ghost" data-aaddprod>+ Product</button></div></div>
       <div class="small muted">Customers see each product's <b>selling price = Rate × ${num(A.settings.sellPct)}%</b> (or your own price if you fill one in), less their discount, and availability: In stock (more than ${low}), Low (1–${low}) or On request (0). Rates and stock counts are never shown to customers.
         ${A.catalogInfo ? ` Published: ${A.catalogInfo.count} products, ${fmtDT(A.catalogInfo.at)}.` : " Not published yet."}</div>
-      ${A.feed ? `<div class="card pad small stack" style="gap:4px;border-color:var(--brand)"><div><b>Product names come from D Cart automatically</b> (last update ${fmtDT(A.feed.updatedAt)}, ${A.feed.count} products). Fill in a <b>Rate</b> (or your own price) and <b>Stock</b> here: products without a price stay hidden from customers.</div>${(() => { const nNew = A.products.filter(p => p.isNew).length, nNo = A.products.filter(p => !p.hidden && !(sellOf(p) > 0)).length; return `${nNew ? `<div><b>${nNew}</b> new from D Cart · <button class="btn sm ghost" data-aonly="new">Show them</button> <button class="btn sm ghost" data-aseen>Mark as seen</button></div>` : ""}${nNo ? `<div class="tiny muted">${nNo} products have no price yet, so customers don't see them.</div>` : ""}`; })()}</div>` : `<div class="tiny muted">Tip: connect D Cart (D Cart → Admin panel → D Shop link) and product names and sizes arrive here automatically.</div>`}
+      ${A.feed ? `<div class="card pad small stack" style="gap:4px;border-color:var(--brand)"><div><b>Products and rates come from D Cart automatically</b> (last update ${fmtDT(A.feed.updatedAt)}, ${A.feed.count} products). Customers see Rate × ${num(A.settings.sellPct)}%. A rate you type here is replaced when D Cart's rate changes, so to fix a price for a product, use <b>Own price</b>. Enter <b>Stock</b> here so customers see In stock / Low.</div>${(() => { const nNew = A.products.filter(p => p.isNew).length, nNo = A.products.filter(p => !p.hidden && !(sellOf(p) > 0)).length; return `${nNew ? `<div><b>${nNew}</b> new from D Cart · <button class="btn sm ghost" data-aonly="new">Show them</button> <button class="btn sm ghost" data-aseen>Mark as seen</button></div>` : ""}${nNo ? `<div class="tiny muted">${nNo} products have no price yet, so customers don't see them.</div>` : ""}`; })()}</div>` : `<div class="tiny muted">Tip: connect D Cart (D Cart → Admin panel → D Shop link) and product names and sizes arrive here automatically.</div>`}
       ${msgBox()}
       <div class="row wrap"><input type="search" class="inp" data-aprod="q" placeholder="Search code or description…" value="${esc(V.q)}" style="flex:1;min-width:200px">
         <select data-aprod="type" aria-label="Product type"><option value="">All types</option>${types.map(t => `<option ${V.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>

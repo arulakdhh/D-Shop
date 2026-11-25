@@ -39,10 +39,10 @@
     S.stopSubs(); D.state = "app";
     const col = (name, key) => D.unsubs.push(fs.collection(name).onSnapshot(s => { A[key] = {}; s.docs.forEach(d => A[key][d.id] = d.data()); S.rr(); }, e => { D.err = niceErr(e); S.rr(); }));
     col("customers", "customers"); col("users", "users"); col("logins", "logins"); col("orders", "orders"); col("payments", "payments"); col("advices", "advices");
-    D.unsubs.push(fs.doc("private/products").onSnapshot(s => { if (!A.saving) { A.products = s.exists ? (s.data().list || []) : []; A.feedSig = s.exists ? s.data().feedSig || null : null; } A.prodLoaded = true; mergeFeed(); S.rr(); }, () => {}));
+    D.unsubs.push(fs.doc("private/products").onSnapshot(s => { if (!A.saving) { A.products = s.exists ? (s.data().list || []) : []; A.feedSig = s.exists ? s.data().feedSig || null : null; } A.prodLoaded = true; mergeFeed(); checkCatalog(); S.rr(); }, () => {}));
     D.unsubs.push(fs.doc("private/dcartFeed").onSnapshot(s => { A.feed = s.exists ? s.data() : null; mergeFeed(); S.rr(); }, () => {}));
     D.unsubs.push(fs.doc("config/settings").onSnapshot(s => { if (s.exists) A.settings = { ...A.settings, ...s.data() }; S.rr(); }, () => {}));
-    D.unsubs.push(fs.doc("catalog/main").onSnapshot(s => { A.catalogInfo = s.exists ? { count: s.data().count, at: s.data().updatedAt } : null; S.rr(); }, () => {}));
+    D.unsubs.push(fs.doc("catalog/main").onSnapshot(s => { A.catalogInfo = s.exists ? { count: s.data().count, at: s.data().updatedAt, calc: s.data().calc } : null; A.catLoaded = true; checkCatalog(); S.rr(); }, () => {}));
     if (!location.hash || location.hash === "#") history.replaceState(null, "", "#dash");
     route();
   }
@@ -58,15 +58,23 @@
   function after() {}
 
   /* ---------- catalog publishing (selling price only, never the rate) ---------- */
+  const CALC = 2;   // price formula version: rate + sell % (same as D Cart)
+  // Re-make the customer price list by itself if it was made with an older formula, or came out empty while priced products exist.
+  function checkCatalog() {
+    if (!A.prodLoaded || !A.catLoaded || A.checking) return;
+    const priced = A.products.some(p => !p.hidden && sellOf(p) > 0);
+    if (!A.catalogInfo || A.catalogInfo.calc !== CALC || (priced && !A.catalogInfo.count)) { A.checking = true; publishCatalog().catch(() => {}).finally(() => setTimeout(() => (A.checking = false), 3000)); }
+  }
   let pubT = null;
   function schedulePublish() { clearTimeout(pubT); pubT = setTimeout(() => publishCatalog().catch(e => say("bad", "Couldn't publish the catalog: " + niceErr(e))), 700); }
   async function publishCatalog() {
+    if (!A.prodLoaded) throw new Error("Products are still loading. Try again in a moment.");
     const low = +A.settings.lowAt || 0;
     const list = A.products.filter(p => p.code && p.desc && !p.hidden && sellOf(p) > 0).map(p => {
       const { family, size } = splitSize(p.desc); const st = +p.stock || 0;
       return { mat: String(p.code), desc: String(p.desc), family, size, type: p.type || guessType(p.desc), uom: String(p.uom || ""), hsn: String(p.hsn || ""), price: sellOf(p), avail: st > low ? "ok" : st > 0 ? "low" : "req" };
     }).sort((a, b) => a.type.localeCompare(b.type) || a.family.localeCompare(b.family) || a.desc.localeCompare(b.desc, undefined, { numeric: true }));
-    await fs.doc("catalog/main").set({ list, count: list.length, gstPct: +A.settings.gstPct || 0, payTo: A.settings.payTo || "", updatedAt: nowIso() });
+    await fs.doc("catalog/main").set({ list, count: list.length, calc: CALC, gstPct: +A.settings.gstPct || 0, payTo: A.settings.payTo || "", updatedAt: nowIso() });
   }
   let saveT = null;
   function saveProducts(now) {

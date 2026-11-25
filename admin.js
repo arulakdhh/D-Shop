@@ -85,7 +85,7 @@
 
   /* ---------- product names and sizes sent by D Cart (Admin panel → D Shop link) ---------- */
   async function mergeFeed() {
-    const F = A.feed; if (!F || !A.prodLoaded || A.merging || !F.sig || F.sig === A.feedSig) return;
+    const F = A.feed; if (!F || !A.prodLoaded || A.merging || !F.sig || F.sig === A.feedSig || F.sig === A.failedSig) return;
     A.merging = true;
     try {
       const idx = new Map(A.products.map((p, i) => [p.code, i])); const inFeed = new Set(); let added = 0, changed = 0;
@@ -99,8 +99,10 @@
       A.feedSig = F.sig; A.lastFeed = { added, changed, at: F.updatedAt };
       await saveProducts(true);
       if (added) toast(`${added} new product${added > 1 ? "s" : ""} from D Cart, priced automatically.`);
-    } catch (e) { say("bad", "Couldn't take in D Cart's product list: " + niceErr(e)); }
-    finally { A.merging = false; }
+    } catch (e) { A.failedSig = F.sig; say("bad", "Couldn't take in D Cart's product list: " + niceErr(e)); }
+    finally { A.merging = false; S.rr();
+      // a newer list may have arrived from D Cart while this one was being taken in
+      if (A.feed && A.feed.sig && A.feed.sig !== A.feedSig && A.feed.sig !== A.failedSig) setTimeout(mergeFeed, 300); }
   }
 
   /* ---------- logins ---------- */

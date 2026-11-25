@@ -1,0 +1,64 @@
+rules_version = '2';
+// D Shop (Dr Han Health Care customer app) — access rules for its OWN Firebase project.
+// No emails to edit: the first person to finish "Set up admin" in the app becomes the admin.
+// Firebase console → Firestore Database → Rules → paste all of this → Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function hasOwner() { return exists(/databases/$(database)/documents/config/owner); }
+    function isAdmin() { return signedIn() && hasOwner() && get(/databases/$(database)/documents/config/owner).data.uid == request.auth.uid; }
+    function isCustomer() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function meU() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function custActive() { return isCustomer() && meU().get('active', true) == true; }
+    function myCid() { return meU().cid; }
+
+    // Admin: created once, from the app's first-run screen. After that it can't be taken over.
+    match /config/owner {
+      allow get: if true;
+      allow create: if signedIn() && !hasOwner() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /config/settings { allow read: if isAdmin() || custActive(); allow write: if isAdmin(); }
+
+    // Purchase rates and stock counts: admin only.
+    match /private/{doc} { allow read, write: if isAdmin(); }
+    // What customers see: selling price and availability band only.
+    match /catalog/{doc} { allow read: if isAdmin() || custActive(); allow write: if isAdmin(); }
+
+    match /customers/{cid} {
+      allow read: if isAdmin() || (custActive() && myCid() == cid);
+      allow write: if isAdmin();
+    }
+    match /logins/{loginId} {
+      allow get: if true;                       // the sign-in screen looks up a login ID
+      allow list, write: if isAdmin();
+    }
+    match /users/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create, delete: if isAdmin();
+      // a customer may only clear their own "must change password" flag
+      allow update: if isAdmin()
+        || (signedIn() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustReset', 'pwChangedAt', 'lastSeen'])
+            && request.resource.data.get('mustReset', false) == false);
+    }
+    match /orders/{id} {
+      allow read: if isAdmin() || (custActive() && resource.data.cid == myCid());
+      allow create: if custActive()
+        && request.resource.data.cid == myCid()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'sent'
+        && !('bill' in request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+    match /payments/{id} {
+      allow read: if isAdmin() || (custActive() && resource.data.cid == myCid());
+      allow write: if isAdmin();
+    }
+    match /advices/{id} {
+      allow read: if isAdmin() || (custActive() && resource.data.cid == myCid());
+      allow create: if custActive() && request.resource.data.cid == myCid() && request.resource.data.uid == request.auth.uid && request.resource.data.status == 'new';
+      allow update, delete: if isAdmin();
+    }
+  }
+}
